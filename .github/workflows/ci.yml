@@ -18,8 +18,9 @@ jobs:
       DB_PASSWORD: matchforge
       MATCHFORGE_JWT_SECRET: ci-jwt-secret-key-at-least-32-chars-long
       MATCHFORGE_FLYWAY_BASELINE: "true"
-      MATCHFORGE_ADMIN_USERNAME: ciadmin
-      MATCHFORGE_ADMIN_PASSWORD: CiAdminPassphrase-1
+      # Must match application-test.yml defaults and AuthTestHelper.loginAdmin()
+      MATCHFORGE_ADMIN_USERNAME: testadmin
+      MATCHFORGE_ADMIN_PASSWORD: TestAdminPassphrase-1
     services:
       postgres:
         image: postgres:16-alpine
