@@ -4,6 +4,9 @@ spring:
       on-profile: prod
 
   datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     hikari:
       maximum-pool-size: 5
       minimum-idle: 1
@@ -18,7 +21,7 @@ spring:
 
   flyway:
     enabled: true
-    baseline-on-migrate: false
+    baseline-on-migrate: ${MATCHFORGE_FLYWAY_BASELINE:false}
 
 server:
   address: 0.0.0.0

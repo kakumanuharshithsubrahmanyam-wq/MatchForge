@@ -70,6 +70,16 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 
 Until `matchforge_app` exists, you may use `neondb_owner` for the **first** deploy only, then rotate to `matchforge_app`.
 
+## Production database configuration
+
+With `SPRING_PROFILES_ACTIVE=prod`, MatchForge **requires** `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` in the process environment (for example Render secret env vars). The `prod` profile binds `spring.datasource.*` directly to those variables with **no localhost fallback**.
+
+`localhost:5433` (or Docker Compose Postgres) is for **local development only** via default `application.yml` when no `prod` profile is active.
+
+If any `DB_*` variable is missing, or `DB_URL` still points at localhost, startup fails immediately with a clear error (`ProductionDatabaseEnvironmentValidator`) before Flyway runs.
+
+Flyway uses the **primary datasource** in production (`spring.flyway.url` / `user` / `password` are not set). Set `MATCHFORGE_FLYWAY_BASELINE=false` on a fresh Neon database.
+
 ## Render environment variables
 
 | Variable | Required | Secret | Purpose | Source |

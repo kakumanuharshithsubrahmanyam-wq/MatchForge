@@ -15,11 +15,16 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles({"test", "prod"})
+@ActiveProfiles("test")
 @TestPropertySource(
 		properties = {
 			"matchforge.security.jwt-secret=test-jwt-secret-key-at-least-32-characters-long",
-			"MATCHFORGE_JWT_SECRET=test-jwt-secret-key-at-least-32-characters-long"
+			"MATCHFORGE_JWT_SECRET=test-jwt-secret-key-at-least-32-characters-long",
+			"matchforge.api.swagger-ui-enabled=false",
+			"matchforge.api.open-api-enabled=false",
+			"springdoc.api-docs.enabled=false",
+			"springdoc.swagger-ui.enabled=false",
+			"management.endpoint.health.show-details=never"
 		})
 class ProductionProfileSecurityTest {
 
