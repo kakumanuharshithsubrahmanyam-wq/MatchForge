@@ -1,0 +1,32 @@
+# MatchForge — Render Blueprint (Docker web service + external Neon PostgreSQL)
+# Docs: docs/deployment.md — do not commit secrets; use Dashboard prompts for sync: false vars.
+
+services:
+  - type: web
+    name: matchforge
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: JAVA_OPTS
+        value: "-XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport"
+      - key: MATCHFORGE_FLYWAY_BASELINE
+        value: "false"
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: MATCHFORGE_JWT_SECRET
+        generateValue: true
+      - key: MATCHFORGE_ADMIN_USERNAME
+        sync: false
+      - key: MATCHFORGE_ADMIN_PASSWORD
+        generateValue: true

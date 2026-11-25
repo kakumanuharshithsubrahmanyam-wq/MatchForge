@@ -171,3 +171,10 @@ All entities extend `BaseEntity` (UUID id, `created_at`, `updated_at`). Optimist
 | `MATCHFORGE_FLYWAY_BASELINE` | Only for legacy adoption (once) |
 
 See `.env.example` and `README.md` for local setup.
+
+## Hosted deployment (Phase 5)
+
+- **Render** Docker web service — [`render.yaml`](./render.yaml), region `singapore`, free plan, health check `/actuator/health`.
+- **Neon** PostgreSQL — external JDBC URL with `sslmode=require`; not provisioned by the Blueprint.
+- **Production binding:** `server.address=0.0.0.0`, `server.port=${PORT:8080}`; Hikari pool sized for small containers.
+- **Operator guide:** [docs/deployment.md](docs/deployment.md).

@@ -17,7 +17,7 @@ MatchForge is a **multiplayer game backend and matchmaking platform** built to d
 ## Non-goals (initial scope)
 
 - Real-time gameplay simulation or game engine integration
-- Full authentication/authorization (may add API keys or simple tokens later)
+- Enterprise SSO or OAuth federation (JWT + roles implemented in Phase 4)
 - Multi-region deployment or Kubernetes orchestration
 - Client applications (mobile/desktop); APIs are the product surface
 - Anti-cheat, billing, or live-ops tooling
@@ -110,14 +110,14 @@ flowchart LR
 
 JWT auth, role-based authorization, Flyway migrations, Testcontainers migration IT, correlation IDs, Micrometer metrics, scheduled queue processing, transactional domain events, OpenAPI skeleton, CI verify + Docker build.
 
-### Phase 5 — (future)
+### Phase 5 — Deployment and portfolio release (**implemented**)
 
-- README with run instructions, architecture diagram, API summary.
-- Test coverage on critical paths; optional Testcontainers for CI Postgres.
-- Structured logging ( correlation id optional ).
-- Brief ADRs in ARCHITECTURE.md for any new decisions (auth, matching algorithm v2).
+- Render Blueprint (`render.yaml`) + Neon PostgreSQL integration guide.
+- Production profile tuning (port, pool, admin/JWT requirements).
+- Postman collection, `scripts/demo-matchforge.sh`, and `docs/*` reference.
+- Portfolio README with architecture and ERD diagrams.
 
-**Exit criteria:** One-command local demo (Compose up + sample curl flow); CI runs full test suite.
+**Exit criteria:** Reproducible local demo; deployment artifacts committed; CI baseline preserved (`./mvnw clean verify`).
 
 ## Planned REST API (v1)
 
@@ -181,8 +181,11 @@ This flow is the **north-star acceptance test** for Phases 1–3.
 |----------|----------|
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Modular monolith layout, package tree, layers, persistence, exceptions |
 | `PROJECT_SPEC.md` (this file) | Vision, scope, roadmap, API catalog |
-| [README.md](./README.md) | Local setup, Docker, and testing |
+| [README.md](./README.md) | Local setup, Docker, deployment links |
+| [docs/deployment.md](docs/deployment.md) | Render + Neon setup |
+| [docs/api-reference.md](docs/api-reference.md) | REST reference (prod-safe) |
+| [docs/project-overview.md](docs/project-overview.md) | Engineering case study |
 
 ---
 
-*Status: Phase 4 implemented — JWT security, Flyway, observability, and expanded test suite (see README).*
+*Status: Phases 0–5 implemented — see README and GitHub Actions CI on `main`.*

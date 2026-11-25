@@ -15,7 +15,10 @@ USER matchforge
 
 COPY --from=build /workspace/target/matchforge-*.jar /app/app.jar
 
-ENV JAVA_OPTS=""
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport"
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+	CMD curl -fsS http://127.0.0.1:${PORT:-8080}/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

@@ -114,6 +114,10 @@ public class SecurityConfiguration {
 			if (adminUserSet ^ adminPassSet) {
 				throw new IllegalStateException("Both MATCHFORGE_ADMIN_USERNAME and MATCHFORGE_ADMIN_PASSWORD must be set");
 			}
+			if (production && (!adminUserSet || !adminPassSet)) {
+				throw new IllegalStateException(
+						"Admin bootstrap credentials must be configured in production (MATCHFORGE_ADMIN_USERNAME and MATCHFORGE_ADMIN_PASSWORD)");
+			}
 		}
 	}
 }
