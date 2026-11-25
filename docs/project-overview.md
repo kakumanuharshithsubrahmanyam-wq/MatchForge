@@ -50,7 +50,7 @@ Pairing players with similar ratings improves match quality. Static queues fail 
 
 ## Deployment approach
 
-- **Render** Docker web service (free tier, Singapore region in blueprint).
+- **Render** Docker web service (free tier, Ohio region in blueprint, co-located with Neon).
 - **Neon** PostgreSQL (external, SSL, no Render free DB expiry).
 - `render.yaml` documents required secrets; see [deployment.md](deployment.md).
 

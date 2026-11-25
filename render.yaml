@@ -6,7 +6,7 @@ services:
     name: matchforge
     runtime: docker
     plan: free
-    region: singapore
+    region: ohio
     branch: main
     dockerfilePath: ./Dockerfile
     healthCheckPath: /actuator/health

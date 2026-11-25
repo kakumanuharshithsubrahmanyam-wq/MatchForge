@@ -131,7 +131,7 @@ Application: `http://localhost:8080`. See [ARCHITECTURE.md](ARCHITECTURE.md) for
 
 Hosted setup is **prepared in-repo** (not provisioned automatically):
 
-- [`render.yaml`](render.yaml) — Render Docker web service (free tier, **Singapore**)
+- [`render.yaml`](render.yaml) — Render Docker web service (free tier, **Ohio** — align with Neon `aws-us-east-2`)
 - [docs/deployment.md](docs/deployment.md) — Neon PostgreSQL, secrets, verification
 
 **Free-plan limitations:** Render web services spin down when idle (cold start on first request); Neon free tier has compute/storage quotas and scale-to-zero.
@@ -159,7 +159,7 @@ Swagger UI (`/swagger-ui.html`) is available in **dev**; disabled for anonymous 
 ```bash
 source scripts/local-docker-path.sh
 docker compose up -d postgres
-./mvnw clean verify                    # 99 Surefire + 2 Failsafe (Testcontainers)
+./mvnw clean verify                    # 99 Surefire + 3 Failsafe (Testcontainers; includes PostgreSQL 18)
 ./mvnw clean verify -Punit-only        # Skip Testcontainers when Docker unavailable
 ```
 
