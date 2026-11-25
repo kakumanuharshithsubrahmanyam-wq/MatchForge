@@ -1,27 +1,110 @@
 {
   "info": {
     "name": "MatchForge API",
-    "description": "REST API for MatchForge matchmaking and game sessions. Set `baseUrl` and run auth requests first. Do not store real passwords in this collection.",
+    "description": "MatchForge REST API (v1 under `/api/v1`).\n\n**Variables:** Prefer a Postman *environment* (`baseUrl`, tokens, IDs). Collection variables are fallbacks.\n\n**Production:** Run folder `0 — Operations (safe)` only without approval. Other folders create Neon/Render data (accounts, matches, sessions).\n\n**Two-player flow:** Register A → Register B → (optional Register outsider) → Login tokens → set both AVAILABLE → queue A (QUEUED) → queue B (MATCHED, saves `matchId`) → GET match (saves `sessionId`) → join both → heartbeat/disconnect/reconnect → ADMIN complete.\n\nDo not store production passwords in this collection.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
     { "key": "playerAUsername", "value": "player_a_example" },
     { "key": "playerBUsername", "value": "player_b_example" },
+    { "key": "outsiderUsername", "value": "outsider_example" },
     { "key": "playerPassword", "value": "replace-with-strong-password" },
     { "key": "adminUsername", "value": "replace-admin-username" },
     { "key": "adminPassword", "value": "replace-admin-password" },
     { "key": "playerAToken", "value": "" },
     { "key": "playerBToken", "value": "" },
+    { "key": "outsiderToken", "value": "" },
     { "key": "adminToken", "value": "" },
     { "key": "playerAId", "value": "" },
     { "key": "playerBId", "value": "" },
+    { "key": "outsiderId", "value": "" },
     { "key": "matchId", "value": "" },
     { "key": "sessionId", "value": "" }
   ],
   "item": [
     {
-      "name": "Authentication",
+      "name": "0 — Operations (safe on production)",
+      "description": "**Read-only / unauthenticated.** Safe to run against production. Does not mutate data.",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/actuator/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('status UP', () => pm.expect(j.status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Players API requires auth",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/players"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 401 without token', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prometheus requires auth (prod)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/actuator/prometheus"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 401 without token', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Swagger UI protected (prod)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/swagger-ui/index.html"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Not public in production', () => {",
+                  "  const c = pm.response.code;",
+                  "  pm.expect([401, 403, 404]).to.include(c);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1 — Authentication (mutating)",
+      "description": "Creates accounts and JWTs. Use **unique usernames** on production (e.g. `postman_a_1732550000`).",
       "item": [
         {
           "name": "Register player A",
@@ -39,10 +122,15 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
                   "const j = pm.response.json();",
-                  "pm.collectionVariables.set('playerAToken', j.accessToken);",
-                  "pm.collectionVariables.set('playerAId', j.playerId);"
+                  "pm.test('JWT issued', () => {",
+                  "  pm.expect(j.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(j.tokenType).to.eql('Bearer');",
+                  "  pm.expect(j.role).to.eql('PLAYER');",
+                  "});",
+                  "pm.variables.set('playerAToken', j.accessToken);",
+                  "pm.variables.set('playerAId', j.playerId);"
                 ]
               }
             }
@@ -64,10 +152,35 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Created', () => pm.response.to.have.status(201));",
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
                   "const j = pm.response.json();",
-                  "pm.collectionVariables.set('playerBToken', j.accessToken);",
-                  "pm.collectionVariables.set('playerBId', j.playerId);"
+                  "pm.variables.set('playerBToken', j.accessToken);",
+                  "pm.variables.set('playerBId', j.playerId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register outsider (authorization tests)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{outsiderUsername}}\",\n  \"password\": \"{{playerPassword}}\",\n  \"skillRating\": 1000\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/register"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.variables.set('outsiderToken', j.accessToken);",
+                  "pm.variables.set('outsiderId', j.playerId);"
                 ]
               }
             }
@@ -89,7 +202,8 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.collectionVariables.set('playerAToken', pm.response.json().accessToken);"
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.variables.set('playerAToken', pm.response.json().accessToken);"
                 ]
               }
             }
@@ -111,7 +225,10 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.collectionVariables.set('adminToken', pm.response.json().accessToken);"
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('ADMIN role', () => pm.expect(j.role).to.eql('ADMIN'));",
+                  "pm.variables.set('adminToken', j.accessToken);"
                 ]
               }
             }
@@ -120,18 +237,76 @@
       ]
     },
     {
-      "name": "Players",
+      "name": "2 — Players (mutating)",
+      "description": "Requires `playerAToken` / `playerAId` from registration. Admin requests need `adminToken`.",
       "item": [
         {
-          "name": "Get own profile",
+          "name": "Get own profile (A)",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{playerAToken}}" }],
             "url": "{{baseUrl}}/api/v1/players/{{playerAId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('profile fields', () => {",
+                  "  pm.expect(j.id).to.eql(pm.variables.get('playerAId'));",
+                  "  pm.expect(j.username).to.be.a('string');",
+                  "  pm.expect(j.skillRating).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Update availability",
+          "name": "Patch own skill rating (A)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{playerAToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"skillRating\": 1050\n}" },
+            "url": "{{baseUrl}}/api/v1/players/{{playerAId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('skillRating updated', () => pm.expect(pm.response.json().skillRating).to.eql(1050));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cross-player profile forbidden (A reads B)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{playerAToken}}" }],
+            "url": "{{baseUrl}}/api/v1/players/{{playerBId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Set availability (A)",
           "request": {
             "method": "PUT",
             "header": [
@@ -140,7 +315,38 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"available\": true\n}" },
             "url": "{{baseUrl}}/api/v1/players/{{playerAId}}/availability"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('AVAILABLE', () => pm.expect(pm.response.json().status).to.eql('AVAILABLE'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Set availability (B)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{playerBToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"available\": true\n}" },
+            "url": "{{baseUrl}}/api/v1/players/{{playerBId}}/availability"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
         },
         {
           "name": "Create player (ADMIN)",
@@ -152,10 +358,22 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"ops_player\",\n  \"skillRating\": 900\n}"
+              "raw": "{\n  \"username\": \"{{opsPlayerUsername}}\",\n  \"skillRating\": 900\n}"
             },
             "url": "{{baseUrl}}/api/v1/players"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const expected = pm.variables.get('opsPlayerUsername');",
+                  "pm.test('username matches opsPlayerUsername', () => pm.expect(pm.response.json().username).to.eql(expected));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "List players (ADMIN)",
@@ -163,12 +381,24 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
             "url": "{{baseUrl}}/api/v1/players"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "Matchmaking",
+      "name": "3 — Matchmaking (mutating)",
+      "description": "Join queue for both players (B should match). Requires availability set.",
       "item": [
         {
           "name": "Join queue (player A)",
@@ -180,10 +410,22 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"playerId\": \"{{playerAId}}\"\n}" },
             "url": "{{baseUrl}}/api/v1/matchmaking/queue"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 202', () => pm.response.to.have.status(202));",
+                  "const j = pm.response.json();",
+                  "pm.test('QUEUED', () => pm.expect(j.state).to.eql('QUEUED'));"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Join queue (player B — expect MATCHED)",
+          "name": "Join queue (player B — MATCHED)",
           "request": {
             "method": "POST",
             "header": [
@@ -198,33 +440,57 @@
               "listen": "test",
               "script": {
                 "exec": [
+                  "pm.test('HTTP 202', () => pm.response.to.have.status(202));",
                   "const j = pm.response.json();",
-                  "if (j.matchId) pm.collectionVariables.set('matchId', j.matchId);"
+                  "pm.test('MATCHED', () => pm.expect(j.state).to.eql('MATCHED'));",
+                  "pm.test('matchId present', () => pm.expect(j.matchId).to.be.a('string').and.not.empty);",
+                  "pm.variables.set('matchId', j.matchId);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "Queue status",
+          "name": "Queue status (A)",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{playerAToken}}" }],
             "url": "{{baseUrl}}/api/v1/matchmaking/queue/{{playerAId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
         },
         {
-          "name": "Leave queue",
+          "name": "Leave queue (optional cleanup)",
           "request": {
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{playerAToken}}" }],
             "url": "{{baseUrl}}/api/v1/matchmaking/queue/{{playerAId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 if still queued', () => {",
+                  "  pm.expect([200, 409, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "Matches",
+      "name": "4 — Matches (read)",
+      "description": "Requires `matchId` from matchmaking.",
       "item": [
         {
           "name": "Get match",
@@ -238,8 +504,10 @@
               "listen": "test",
               "script": {
                 "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
-                  "if (j.sessionId) pm.collectionVariables.set('sessionId', j.sessionId);"
+                  "pm.test('sessionId present', () => pm.expect(j.sessionId).to.be.a('string').and.not.empty);",
+                  "pm.variables.set('sessionId', j.sessionId);"
                 ]
               }
             }
@@ -248,15 +516,40 @@
       ]
     },
     {
-      "name": "Sessions",
+      "name": "5 — Sessions (mutating)",
+      "description": "Requires `sessionId`. Complete/cancel are ADMIN-only.",
       "item": [
         {
-          "name": "Get session",
+          "name": "Outsider cannot view session",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{outsiderToken}}" }],
+            "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 403', () => pm.response.to.have.status(403));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get session (A)",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{playerAToken}}" }],
             "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
         },
         {
           "name": "List participants",
@@ -264,7 +557,15 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{playerAToken}}" }],
             "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}/participants"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
         },
         {
           "name": "Join session (A)",
@@ -276,7 +577,15 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"playerId\": \"{{playerAId}}\"\n}" },
             "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}/join"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
         },
         {
           "name": "Join session (B)",
@@ -288,10 +597,21 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"playerId\": \"{{playerBId}}\"\n}" },
             "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}/join"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ACTIVE', () => pm.expect(pm.response.json().status).to.eql('ACTIVE'));"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Heartbeat",
+          "name": "Heartbeat (A)",
           "request": {
             "method": "POST",
             "header": [
@@ -300,10 +620,18 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"playerId\": \"{{playerAId}}\"\n}" },
             "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}/heartbeat"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
         },
         {
-          "name": "Disconnect",
+          "name": "Disconnect (A)",
           "request": {
             "method": "POST",
             "header": [
@@ -312,10 +640,18 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"playerId\": \"{{playerAId}}\"\n}" },
             "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}/disconnect"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
         },
         {
-          "name": "Reconnect",
+          "name": "Reconnect (A)",
           "request": {
             "method": "POST",
             "header": [
@@ -324,7 +660,31 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"playerId\": \"{{playerAId}}\"\n}" },
             "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}/reconnect"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Player cannot complete session",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{playerAToken}}" }],
+            "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}/complete"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('HTTP 403', () => pm.response.to.have.status(403));"]
+              }
+            }
+          ]
         },
         {
           "name": "Complete session (ADMIN)",
@@ -332,15 +692,38 @@
             "method": "POST",
             "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
             "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}/complete"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('COMPLETED', () => pm.expect(pm.response.json().status).to.eql('COMPLETED'));"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Cancel session (ADMIN)",
+          "name": "Cancel session (ADMIN — optional)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
             "url": "{{baseUrl}}/api/v1/sessions/{{sessionId}}/cancel"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 if cancellable', () => {",
+                  "  pm.expect([200, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

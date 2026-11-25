@@ -141,7 +141,7 @@ Hosted setup is **prepared in-repo** (not provisioned automatically):
 | Resource | Location |
 |----------|----------|
 | REST reference | [docs/api-reference.md](docs/api-reference.md) |
-| Postman | [postman/MatchForge.postman_collection.json](postman/MatchForge.postman_collection.json) |
+| Postman | [postman/MatchForge.postman_collection.json](postman/MatchForge.postman_collection.json) — see [docs/POST_DEPLOYMENT_TESTING.md](docs/POST_DEPLOYMENT_TESTING.md) |
 | Automated demo | `./scripts/demo-matchforge.sh` |
 
 Demo with admin completion:

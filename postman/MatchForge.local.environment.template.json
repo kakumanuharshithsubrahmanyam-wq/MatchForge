@@ -1,0 +1,110 @@
+{
+  "id": "matchforge-local-template",
+  "name": "MatchForge — Local (template)",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "playerAUsername",
+      "value": "postman_player_a",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "playerBUsername",
+      "value": "postman_player_b",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "playerPassword",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "adminUsername",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminPassword",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "outsiderUsername",
+      "value": "postman_outsider",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "opsPlayerUsername",
+      "value": "postman_ops_player",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "playerAToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "playerBToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "outsiderToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "playerAId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "playerBId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "outsiderId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "matchId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "sessionId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_using": "MatchForge repo template"
+}
