@@ -7,15 +7,15 @@ import com.matchforge.auth.repository.AccountRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import com.matchforge.player.service.UsernameNormalizer;
 
 @Component
-public class AdminBootstrapService implements ApplicationRunner {
+public class AdminBootstrapService {
 
 	private static final Logger log = LoggerFactory.getLogger(AdminBootstrapService.class);
 
@@ -30,8 +30,8 @@ public class AdminBootstrapService implements ApplicationRunner {
 		this.passwordEncoder = passwordEncoder;
 	}
 
-	@Override
-	public void run(ApplicationArguments args) {
+	@EventListener(ApplicationReadyEvent.class)
+	public void bootstrapWhenReady() {
 		String username = securityProperties.getAdminUsername();
 		String password = securityProperties.getAdminPassword();
 		if (username == null || username.isBlank()) {

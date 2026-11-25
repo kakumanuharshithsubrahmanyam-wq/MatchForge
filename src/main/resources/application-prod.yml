@@ -18,6 +18,13 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+  data:
+    jpa:
+      repositories:
+        bootstrap-mode: deferred
+
+  jmx:
+    enabled: false
 
   flyway:
     enabled: true
@@ -25,7 +32,8 @@ spring:
 
 server:
   address: 0.0.0.0
-  port: ${PORT:8080}
+  port: ${PORT:10000}
+  shutdown: graceful
   error:
     include-stacktrace: never
     include-message: never

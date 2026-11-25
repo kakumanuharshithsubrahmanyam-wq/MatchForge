@@ -15,7 +15,7 @@ services:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: JAVA_OPTS
-        value: "-XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport"
+        value: "-XX:MaxRAMPercentage=50.0 -XX:InitialRAMPercentage=20.0 -XX:+UseContainerSupport -XX:MaxMetaspaceSize=128m -XX:+ExitOnOutOfMemoryError"
       - key: MATCHFORGE_FLYWAY_BASELINE
         value: "false"
       - key: DB_URL

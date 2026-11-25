@@ -80,6 +80,24 @@ If any `DB_*` variable is missing, or `DB_URL` still points at localhost, startu
 
 Flyway uses the **primary datasource** in production (`spring.flyway.url` / `user` / `password` are not set). Set `MATCHFORGE_FLYWAY_BASELINE=false` on a fresh Neon database.
 
+## HTTP port and container resources (Render)
+
+| Item | Production value | Notes |
+|------|------------------|--------|
+| `PORT` | Injected by Render | Do **not** hard-code in the Dockerfile CMD |
+| `server.address` | `0.0.0.0` | Required so Render can reach the container |
+| `server.port` | `${PORT:10000}` | Binds the HTTP connector Render probes |
+| Management port | *(none)* | Actuator shares the main web server |
+| Health check path | `/actuator/health` | Set in `render.yaml`; must stay `permitAll` |
+
+Free-tier instances have limited RAM. The blueprint uses container-aware JVM options:
+
+`-XX:MaxRAMPercentage=50.0 -XX:InitialRAMPercentage=20.0 -XX:+UseContainerSupport -XX:MaxMetaspaceSize=128m -XX:+ExitOnOutOfMemoryError`
+
+This leaves headroom for metaspace, threads, and native allocations (PostgreSQL driver, Tomcat). Startup logs include phase timings via `StartupDiagnostics` (`HTTP server initialized and listening on port …`, then `MatchForge startup complete`).
+
+Admin bootstrap runs on `ApplicationReadyEvent` (after the HTTP server is listening) so slow BCrypt work does not delay the initial port bind.
+
 ## Render environment variables
 
 | Variable | Required | Secret | Purpose | Source |
