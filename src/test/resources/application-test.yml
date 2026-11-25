@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/matchforge}
+    username: ${DB_USERNAME:matchforge}
+    password: ${DB_PASSWORD:matchforge}
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
