@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+
+  <!-- Render/Docker builds: avoid Maven Central HTTP 429 via Google-hosted mirror.
+       See https://docs.cloud.google.com/docs/buildpacks/java -->
+  <mirrors>
+    <mirror>
+      <id>google-maven-central</id>
+      <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
+  </mirrors>
+
+  <!-- Modest resolver retries for transient 429/503 (not a substitute for mirroring/caching). -->
+  <profiles>
+    <profile>
+      <id>docker-resolver-retry</id>
+      <properties>
+        <aether.connector.http.retryHandler.count>3</aether.connector.http.retryHandler.count>
+        <aether.connector.http.retryHandler.requestSentEnabled>true</aether.connector.http.retryHandler.requestSentEnabled>
+      </properties>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>docker-resolver-retry</activeProfile>
+  </activeProfiles>
+</settings>
