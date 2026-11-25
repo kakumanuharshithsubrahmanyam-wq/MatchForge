@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -33,6 +36,48 @@ public class GlobalExceptionHandler {
 				ex.getMessage(),
 				request.getRequestURI());
 		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+	}
+
+	@ExceptionHandler(BadCredentialsException.class)
+	public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, HttpServletRequest request) {
+		ErrorResponse body = ErrorResponse.of(
+				HttpStatus.UNAUTHORIZED.value(),
+				HttpStatus.UNAUTHORIZED.getReasonPhrase(),
+				"Invalid credentials",
+				request.getRequestURI());
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+	}
+
+	@ExceptionHandler(AccessDeniedException.class)
+	public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+		ErrorResponse body = ErrorResponse.of(
+				HttpStatus.FORBIDDEN.value(),
+				HttpStatus.FORBIDDEN.getReasonPhrase(),
+				"Access denied",
+				request.getRequestURI());
+		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+	}
+
+	@ExceptionHandler(IllegalArgumentException.class)
+	public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+		ErrorResponse body = ErrorResponse.of(
+				HttpStatus.BAD_REQUEST.value(),
+				HttpStatus.BAD_REQUEST.getReasonPhrase(),
+				ex.getMessage(),
+				request.getRequestURI());
+		return ResponseEntity.badRequest().body(body);
+	}
+
+	@ExceptionHandler(DataIntegrityViolationException.class)
+	public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+			DataIntegrityViolationException ex, HttpServletRequest request) {
+		log.warn("Data integrity violation for {} {}", request.getMethod(), request.getRequestURI());
+		ErrorResponse body = ErrorResponse.of(
+				HttpStatus.CONFLICT.value(),
+				HttpStatus.CONFLICT.getReasonPhrase(),
+				"Operation conflicts with current data",
+				request.getRequestURI());
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
 	}
 
 	@ExceptionHandler(ConflictException.class)

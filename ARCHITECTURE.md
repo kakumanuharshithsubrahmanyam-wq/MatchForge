@@ -1,199 +1,173 @@
-# MatchForge — Architecture
+# MatchForge Architecture
 
-## Architectural style
+## System overview
 
-**Modular monolith:** one deployable Spring Boot application, logically split into **feature modules** that own their web, service, persistence, and DTO types. Shared infrastructure lives in `common`. This keeps EA-relevant concerns visible (matchmaking, sessions, player data) without premature microservice extraction.
+MatchForge is a **modular monolith** Spring Boot application that provides player profiles, skill-based 1v1 matchmaking, and multiplayer game session management over PostgreSQL.
 
-### Rationale
+| Layer | Technology |
+|-------|------------|
+| Runtime | Java 21 |
+| Framework | Spring Boot 4.2 |
+| Web | Spring WebMVC, Jakarta Validation |
+| Security | Spring Security, OAuth2 Resource Server, HS256 JWT |
+| Persistence | Spring Data JPA, Hibernate `validate`, Flyway |
+| Database | PostgreSQL 16 |
+| Observability | Actuator, Micrometer, Prometheus registry, correlation IDs |
+| API docs | springdoc OpenAPI 3 (dev-oriented) |
+| Build / CI | Maven, GitHub Actions, Testcontainers (Failsafe) |
 
-- Single JVM simplifies local dev, tests, and Docker for an internship portfolio.
-- Feature folders enforce boundaries and mirror how game backends often group teams (player services vs. matchmaking).
-- We can extract a module to a separate service later without rewriting domain logic if package boundaries stay clean.
+Entry point: `com.matchforge.MatchforgeApplication`.
 
-## Layering (per feature module)
+## Module boundaries
 
-Each feature follows the same vertical slice:
-
-```
-HTTP (controller)
-    → application service (use cases, transactions)
-        → repository (Spring Data JPA)
-            → entity (persistence model)
-```
-
-| Layer | Responsibility | Must not |
-|-------|----------------|----------|
-| `web` | REST mapping, status codes, DTO in/out | Access repositories directly |
-| `service` | Business rules, orchestration, `@Transactional` | Know about HTTP |
-| `repository` | Persistence queries | Contain business rules |
-| `domain` / `entity` | DB mapping, enums | Appear in API responses |
-| `dto` | API contracts, validation annotations | JPA annotations |
-
-**Dependency rule:** `web` → `service` → `repository` → `entity`. `dto` is used by `web` and sometimes `service` for boundaries. `common` is depended upon by all features; features do not depend on each other’s internals—only on **published service APIs** when orchestration requires it (e.g. matchmaking calling session creation).
-
-## Cross-cutting concerns (`common`)
-
-| Concern | Approach |
-|---------|----------|
-| Identifiers | UUID for all aggregate roots |
-| Timestamps | `Instant` or `OffsetDateTime` on base audit fields (created/updated) |
-| Validation | Jakarta Validation on request DTOs; `@Valid` on controller parameters |
-| Errors | `common.error.GlobalExceptionHandler` + `ErrorResponse` (status, message, field errors) |
-| Logging | SLF4J; INFO for lifecycle events, DEBUG behind profile |
-| Configuration | `@ConfigurationProperties` where grouped settings emerge (matchmaking thresholds) |
-
-## Proposed package structure
-
-Root application class remains at the base package. **Recommended base package:** `com.matchforge` (flatten Initializr’s `com.matchforge.matchforge` when implementing Phase 0—single rename of the main class package).
-
-```
-com.matchforge
-├── MatchforgeApplication.java
-│
-├── common
-│   ├── error
-│   │   ├── ErrorResponse.java
-│   │   ├── ResourceNotFoundException.java
-│   │   ├── ConflictException.java
-│   │   └── GlobalExceptionHandler.java
-│   ├── persistence
-│   │   ├── BaseEntity.java          # id (UUID), createdAt, updatedAt
-│   │   └── UuidGenerator.java       # only if not using @GeneratedValue strategy
-│   └── config
-│       ├── JpaAuditingConfig.java   # optional, when audit fields added
-│       └── WebConfig.java             # CORS etc. if needed later
-│
-├── player
-│   ├── web
-│   │   └── PlayerController.java
-│   ├── service
-│   │   └── PlayerService.java
-│   ├── repository
-│   │   └── PlayerRepository.java
-│   ├── domain
-│   │   ├── Player.java
-│   │   └── PlayerStatus.java          # e.g. OFFLINE, AVAILABLE, IN_QUEUE, IN_SESSION
-│   └── dto
-│       ├── CreatePlayerRequest.java
-│       ├── UpdatePlayerRequest.java
-│       ├── SetAvailabilityRequest.java
-│       └── PlayerResponse.java
-│
-├── matchmaking
-│   ├── web
-│   │   └── MatchmakingController.java
-│   ├── service
-│   │   ├── MatchmakingService.java
-│   │   └── MatchmakingPolicy.java     # skill window, team size (plain class, no extra framework)
-│   ├── repository
-│   │   └── QueueEntryRepository.java
-│   ├── domain
-│   │   ├── QueueEntry.java
-│   │   └── QueueStatus.java
-│   └── dto
-│       ├── JoinQueueRequest.java
-│       ├── QueueStatusResponse.java
-│       └── MatchResultResponse.java   # optional expose when match created
-│
-└── session
-    ├── web
-    │   └── SessionController.java
-    ├── service
-    │   └── SessionService.java
-    ├── repository
-    │   └── GameSessionRepository.java
-    ├── domain
-    │   ├── GameSession.java           # "Session" conflicts with HTTP session; use GameSession in code
-    │   ├── SessionParticipant.java
-    │   └── SessionState.java
-    └── dto
-        ├── SessionResponse.java
-        ├── SessionParticipantResponse.java
-        └── UpdateSessionRequest.java
+```mermaid
+flowchart TB
+  subgraph common [common]
+    errors[Global error handling]
+    web[CorrelationIdFilter]
+    events[Domain events]
+    metrics[MatchForgeMetrics]
+    flyway[Flyway validators]
+  end
+  subgraph auth [auth]
+    accounts[Account + JWT]
+    security[SecurityFilterChain]
+  end
+  subgraph player [player]
+    profiles[Player lifecycle]
+  end
+  subgraph matchmaking [matchmaking]
+    queue[Queue + algorithm]
+    matches[GameMatch]
+    scheduler[Queue scheduler]
+  end
+  subgraph session [session]
+    lifecycle[Session + participants]
+    maintenance[Stale heartbeat job]
+  end
+  auth --> player
+  matchmaking --> player
+  matchmaking --> session
+  session --> player
+  common --> auth
+  common --> matchmaking
+  common --> session
 ```
 
-### Module interaction (match formation)
+| Module | Responsibility | Does not |
+|--------|----------------|----------|
+| **common** | Shared errors, MDC, metrics, events, Flyway safety | Own business aggregates |
+| **auth** | Credentials, JWT, roles, login lockout | Store gameplay skill/state |
+| **player** | Profile, skill rating, availability, status lifecycle | Match or host sessions |
+| **matchmaking** | Queue, pairing algorithm, match records | Session heartbeats |
+| **session** | Session state machine, participants, heartbeats | Change skill ratings |
+
+Cross-module rule: **matchmaking and session call `PlayerService` for player status**, not `PlayerRepository`.
+
+## Main request flow
 
 ```mermaid
 sequenceDiagram
-  participant API as MatchmakingController
-  participant MM as MatchmakingService
-  participant SS as SessionService
-  participant DB as PostgreSQL
-  API->>MM: joinQueue(playerId)
-  MM->>DB: persist QueueEntry
-  MM->>MM: tryFormMatch()
-  alt match found
-    MM->>SS: createSession(playerIds)
-    SS->>DB: persist GameSession + participants
-    MM->>DB: update queue / player status
-  end
+  participant C as Client
+  participant A as Auth API
+  participant P as Player API
+  participant Q as Matchmaking
+  participant M as Match
+  participant S as Session
+  C->>A: POST /auth/register or /login
+  A-->>C: JWT (PLAYER)
+  C->>P: Bearer JWT profile/availability
+  C->>Q: POST /matchmaking/queue (own playerId)
+  Q-->>C: QUEUED or MATCHED
+  C->>M: GET /matches/{id}
+  C->>S: POST /sessions/{id}/join, heartbeat
+  C->>A: POST /auth/login (ADMIN)
+  C->>S: POST /sessions/{id}/complete (ADMIN)
 ```
 
-`MatchmakingService` depends on **`SessionService` public interface** (constructor-injected), not on `SessionRepository`, to keep session invariants inside the session module.
+1. **Register** — `AuthService` creates `Player` + `Account` in one transaction; returns JWT.
+2. **Login** — BCrypt verify; failed attempts tracked on `Account`; lockout is account-level (not IP rate limiting).
+3. **Queue** — join triggers `MatchmakingService.tryFormMatch`; scheduled job also calls `processQueue()`.
+4. **Match** — persists `game_matches`, creates session via `SessionService.createSessionForMatch`, publishes `MatchCreated` / `SessionCreated` events (after commit).
+5. **Session** — participants join, heartbeats, disconnect/reconnect; **complete/cancel** require **ADMIN**.
 
-## Persistence
+## Database architecture
 
-- **PostgreSQL** as sole datastore in v1.
-- Spring Data JPA repositories; avoid native SQL unless query complexity demands it.
-- Schema management (Phase 0): `ddl-auto: update` in default/`application.yml` for local and Docker dev; production profile will move to `validate` + migrations in a later phase.
-- Relationships:
-  - `GameSession` 1—* `SessionParticipant` *—1 `Player` (by UUID reference).
-  - `QueueEntry` references `Player` by `playerId` (FK).
+Flyway migrations (`src/main/resources/db/migration/`):
 
-## API conventions
+| Version | Purpose |
+|---------|---------|
+| V1 | Phase 0–3 baseline (`players`, `queue_entries`, `game_matches`, `game_sessions`, `session_participants`, partial unique index on active queue) |
+| V2 | `accounts` (auth) |
+| V3 | Login lockout columns on `accounts` |
 
-- Prefix: `/api/v1`.
-- JSON field names: `camelCase`.
-- UUIDs in path and body as standard string format.
-- `POST` creation returns `Location` header optional; minimum `201` with body.
-- Idempotent leave-queue: repeated `DELETE` → `204` even if not in queue (or `404`—pick one in Phase 2 and test it).
+All entities extend `BaseEntity` (UUID id, `created_at`, `updated_at`). Optimistic locking on `queue_entries.version`.
 
-## Testing strategy
+**Relationships (logical):**
 
-| Scope | Tooling | Target |
-|-------|---------|--------|
-| Unit | JUnit 5, Mockito | `MatchmakingPolicy`, state transitions in `SessionService` |
-| Web slice | `@WebMvcTest` + MockMvc | Controllers, validation, exception mapping |
-| Data slice | `@DataJpaTest` | Repositories, UUID mapping |
-| Integration | `@SpringBootTest` | Critical flows; Testcontainers Postgres in Phase 4 if desired |
+- `accounts.player_id` → `players.id` (nullable for ADMIN)
+- `queue_entries.player_id` → players
+- `game_matches` references two players
+- `game_sessions.match_id` unique → one session per match
+- `session_participants` unique per (session, player)
 
-Never assert “tests pass” in commits without CI or local `mvn test` output.
+**Existing DB adoption:** back up first; set `MATCHFORGE_FLYWAY_BASELINE=true` once on a complete Phase 0–3 database. `FlywayLegacySchemaValidator` refuses baseline when legacy tables are incomplete.
 
-## Security (deferred)
+## Security architecture
 
-v1 APIs are **open** behind a private network or local dev. Document in a future ADR if we add:
+- **Stateless** sessions; **CSRF disabled** (bearer API).
+- **JWT** claims: `sub` (account id), `role`, optional `playerId`, `iss`, `exp`. Issuer validated on decode.
+- **Roles:** `PLAYER`, `ADMIN` (no public ADMIN registration).
+- **Authorization:** `@PreAuthorize` + `AuthorizationService` (`@authz`) — self-or-admin for player-scoped IDs; match/session participant checks; ADMIN for list players, session complete/cancel.
+- **Secrets:** `MATCHFORGE_JWT_SECRET` (≥ 32 bytes), `MATCHFORGE_ADMIN_USERNAME` / `MATCHFORGE_ADMIN_PASSWORD` (both required if either set).
+- **Login lockout:** `failed_login_attempts`, `locked_until` on `accounts`; configurable `max-failed-login-attempts` and `login-lockout-seconds`. Complement with gateway rate limiting in production.
+- **Actuator:** health public; other actuator endpoints **ADMIN**. Swagger/OpenAPI **public in dev**, **disabled or ADMIN-only in prod** (`application-prod.yml`).
 
-- Spring Security with API keys, or
-- JWT for player identity tied to `playerId`.
+## Matchmaking design
 
-Registration then becomes the source of truth for identity until auth lands.
+- **Algorithm:** `MatchmakingAlgorithm` — rating window expands over wait time; pick smallest rating gap; FIFO tie-break.
+- **Concurrency:** pessimistic locks on queue entries and ordered player locks in `tryFormMatch`.
+- **Scheduler:** `MatchmakingQueueScheduler` (`@Profile("!test")`) periodically processes `findQueuedEntryIds()`.
+- **Limitation:** pairing quality depends on queue depth and scheduler interval; not a global ELO service.
 
-## DevOps (Phase 0)
+## Session design
 
-```
-/
-├── Dockerfile                  # multi-stage build (JDK 21 → JRE 21)
-├── docker-compose.yml          # postgres + app; app waits for DB health
-├── .env.example                # credentials template (copy to .env)
-├── .github/workflows/ci.yml    # compile, test, package on main PR/push
-└── src/main/resources/
-    └── application.yml         # DB_* env vars, JPA, Actuator, logging
-```
+- **States:** `WAITING_FOR_PLAYERS` → `ACTIVE` / `PAUSED` → `COMPLETED` / `CANCELLED` / `EXPIRED`.
+- **Participants:** `PENDING` → `JOINED` ↔ `DISCONNECTED`.
+- **Heartbeats:** timeout marks disconnect and may pause session; maintenance job (`@Profile("!test")`).
+- **Completion:** ADMIN only — returns players to `AVAILABLE`.
 
-Actuator exposes `/actuator/health` (DB contributes when the datasource is up). Compose uses curl-based app health checks.
+## Observability
 
-## Architectural decision record (ADR) log
+- **Correlation ID:** `X-Correlation-ID` filter → MDC `correlationId` → response header.
+- **Metrics (low cardinality):** registrations, queue joins, matches, sessions created/completed/cancelled, auth failures, disconnections.
+- **Events:** `MatchCreated`, `SessionCreated`, `SessionActivated`, `SessionCompleted`, `SessionCancelled` — published in transactions; `DomainEventListener` handles **after commit**.
 
-| ID | Decision | Status |
-|----|----------|--------|
-| ADR-001 | Modular monolith with feature packages | Accepted |
-| ADR-002 | UUID primary keys for all aggregates | Accepted |
-| ADR-003 | DTO boundary at REST layer | Accepted |
-| ADR-004 | `GameSession` naming to avoid confusion with HTTP session | Accepted |
-| ADR-005 | Dev schema via Hibernate `ddl-auto=update`; migrations deferred | Accepted (Phase 0) |
-| ADR-006 | Error types live under `common.error` (not `exception`/`api`) | Accepted (Phase 0) |
+## Deployment and testing
 
----
+| Profile | Use |
+|---------|-----|
+| default / dev | Local API, Swagger enabled, dev JWT default |
+| test | Integration tests, fixed admin bootstrap |
+| prod | No Swagger, minimal errors, JWT secret required |
 
-See [PROJECT_SPEC.md](./PROJECT_SPEC.md) for roadmap and endpoint list. **Phase 0 foundation is implemented** (package layout, error handling, Postgres config, Docker, CI).
+**Tests:**
+
+- Surefire: unit + JDBC integration (excludes `@Tag("testcontainers")`).
+- Failsafe: `*IT.java` with Testcontainers (requires Docker).
+- **`./mvnw verify -Punit-only`** — skips Failsafe when Docker unavailable.
+
+**CI:** `ubuntu-latest`, Postgres service, `docker info`, then `./mvnw clean verify` (Surefire + Failsafe).
+
+**Compose:** Postgres host port **5433**; app uses Flyway on startup with `ddl-auto: validate`.
+
+## Environment variables (production)
+
+| Variable | Required in prod |
+|----------|------------------|
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Yes |
+| `MATCHFORGE_JWT_SECRET` | Yes |
+| `MATCHFORGE_ADMIN_USERNAME` + `MATCHFORGE_ADMIN_PASSWORD` | If bootstrapping admin |
+| `MATCHFORGE_FLYWAY_BASELINE` | Only for legacy adoption (once) |
+
+See `.env.example` and `README.md` for local setup.

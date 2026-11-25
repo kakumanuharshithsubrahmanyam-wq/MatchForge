@@ -5,4 +5,14 @@ spring:
     password: ${DB_PASSWORD:matchforge}
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    baseline-on-migrate: ${MATCHFORGE_FLYWAY_BASELINE:true}
+    baseline-version: 1
+
+matchforge:
+  security:
+    jwt-secret: test-jwt-secret-key-at-least-32-characters-long
+    admin-username: ${MATCHFORGE_ADMIN_USERNAME:testadmin}
+    admin-password: ${MATCHFORGE_ADMIN_PASSWORD:TestAdminPassphrase-1}

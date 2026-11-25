@@ -56,7 +56,7 @@ flowchart LR
 | Testing | JUnit 5, Spring Boot test starters (incl. WebMVC/JPA test support) |
 | Containers / CI | Docker (planned), GitHub Actions (planned) |
 
-**Current repository state (after Phase 0):** Base package `com.matchforge`, `common.error` global exception handling, `application.yml` with `DB_*` env configuration, Docker/Compose, GitHub Actions CI, and tests for context load and error responses. Feature modules (player, matchmaking, session) are not implemented yet.
+**Current repository state:** Phase 0–3 complete — player service, 1v1 matchmaking, automatic game session provisioning, heartbeat/disconnect/reconnect, stale-session maintenance, **52** automated tests.
 
 ## Engineering rules (binding)
 
@@ -89,23 +89,28 @@ flowchart LR
 
 **Exit criteria:** All player endpoints documented below implemented and tested.
 
-### Phase 2 — Matchmaking module
+### Phase 2 — Matchmaking module (**complete**)
 
-- Queue entry/exit, queue position or status, periodic or on-demand **match formation** (skill-based v1: simple rating window).
-- Persist queue state; emit or create `Session` when match is found.
-- Unit tests for matching rules; integration test for happy path queue → session.
+- Queue join/leave/status APIs, 1v1 skill-window algorithm, `game_matches` persistence (not game sessions yet).
+- Player lifecycle via `PlayerService` only; `PlayerStatus.MATCHED` when paired.
+- PostgreSQL partial unique index on active queue rows; pessimistic locking for pairing.
 
-**Exit criteria:** Two players in queue can be matched into a session record.
+**Exit criteria:** Two `AVAILABLE` players join queue and receive a `game_matches` record; tests cover algorithm, service, repository, HTTP, and concurrency.
 
-### Phase 3 — Session module
+### Phase 3 — Session module (**complete**)
 
-- Session CRUD-ish API: read session, list participants, transition state with validation.
-- Link sessions to players created in Phase 1.
-- Tests for invalid transitions (e.g. `COMPLETED` → `ACTIVE` rejected).
+- `game_sessions` + `session_participants`, automatic creation after match.
+- Join, heartbeat, disconnect/reconnect, complete/cancel APIs.
+- `PlayerService` owns `MATCHED ↔ IN_SESSION ↔ AVAILABLE` transitions.
+- Scheduled stale-heartbeat maintenance (disabled in `test` profile).
 
-**Exit criteria:** Session lifecycle enforced in service layer with tests.
+**Exit criteria:** End-to-end test from registration → queue → match → session → active → complete.
 
-### Phase 4 — Hardening & portfolio polish
+### Phase 4 — Security, reliability & production readiness (**implemented**)
+
+JWT auth, role-based authorization, Flyway migrations, Testcontainers migration IT, correlation IDs, Micrometer metrics, scheduled queue processing, transactional domain events, OpenAPI skeleton, CI verify + Docker build.
+
+### Phase 5 — (future)
 
 - README with run instructions, architecture diagram, API summary.
 - Test coverage on critical paths; optional Testcontainers for CI Postgres.
@@ -132,8 +137,9 @@ Base path: `/api/v1`. All successful resource bodies use JSON. IDs are UUID stri
 | Method | Path | Description | Success |
 |--------|------|-------------|---------|
 | `POST` | `/matchmaking/queue` | Join matchmaking queue | `202 Accepted` |
-| `DELETE` | `/matchmaking/queue/{playerId}` | Leave queue | `204 No Content` |
+| `DELETE` | `/matchmaking/queue/{playerId}` | Leave queue | `200 OK` |
 | `GET` | `/matchmaking/queue/{playerId}` | Queue status for player | `200 OK` |
+| `GET` | `/matches/{matchId}` | Get 1v1 match (Phase 2) | `200 OK` |
 
 ### Session
 
@@ -164,8 +170,8 @@ Request/response schemas will be defined alongside DTO implementation in each ph
 
 1. Register two players with skill ratings.
 2. Both set availability and join the queue.
-3. Matchmaking creates a session with both as participants.
-4. Client fetches session and participants; optionally mark session `ACTIVE` then `COMPLETED`.
+3. Matchmaking creates a **match** (`game_matches`); Phase 3 will promote to a **game session**.
+4. Client fetches match details; Phase 3 will add session participants and lifecycle.
 
 This flow is the **north-star acceptance test** for Phases 1–3.
 
@@ -179,4 +185,4 @@ This flow is the **north-star acceptance test** for Phases 1–3.
 
 ---
 
-*Status: Phase 0 complete — ready for Phase 1 (Player module).*
+*Status: Phase 4 implemented — JWT security, Flyway, observability, and expanded test suite (see README).*

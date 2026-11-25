@@ -16,6 +16,10 @@ jobs:
       DB_URL: jdbc:postgresql://localhost:5432/matchforge_test
       DB_USERNAME: matchforge
       DB_PASSWORD: matchforge
+      MATCHFORGE_JWT_SECRET: ci-jwt-secret-key-at-least-32-chars-long
+      MATCHFORGE_FLYWAY_BASELINE: "true"
+      MATCHFORGE_ADMIN_USERNAME: ciadmin
+      MATCHFORGE_ADMIN_PASSWORD: CiAdminPassphrase-1
     services:
       postgres:
         image: postgres:16-alpine
@@ -44,8 +48,14 @@ jobs:
       - name: Compile
         run: ./mvnw -B compile
 
-      - name: Test
-        run: ./mvnw -B test
+      - name: Verify Docker for Testcontainers
+        run: docker info
+
+      - name: Unit, JDBC integration, and Testcontainers tests
+        run: ./mvnw -B clean verify
 
       - name: Package
         run: ./mvnw -B -DskipTests package
+
+      - name: Docker image build
+        run: docker build -t matchforge:ci .
